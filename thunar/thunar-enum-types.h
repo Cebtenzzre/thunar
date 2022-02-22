@@ -89,7 +89,9 @@ GType thunar_date_style_get_type (void) G_GNUC_CONST;
  * ThunarColumn:
  * @THUNAR_COLUMN_DATE_CREATED  : created time.
  * @THUNAR_COLUMN_DATE_ACCESSED : last access time.
+ * @THUNAR_COLUMN_DATE_CREATED  : creation time.
  * @THUNAR_COLUMN_DATE_MODIFIED : last modification time.
+ * @THUNAR_COLUMN_DATE_CHANGED  : last status change time.
  * @THUNAR_COLUMN_DATE_DELETED  : deletion time.
  * @THUNAR_COLUMN_RECENCY       : time of modification of recent info.
  * @THUNAR_COLUMN_LOCATION      : file location.
@@ -114,6 +116,7 @@ typedef enum
   THUNAR_COLUMN_DATE_ACCESSED,
   THUNAR_COLUMN_DATE_MODIFIED,
   THUNAR_COLUMN_DATE_DELETED,
+  THUNAR_COLUMN_DATE_CHANGED,
   THUNAR_COLUMN_RECENCY,
   THUNAR_COLUMN_LOCATION,
   THUNAR_COLUMN_GROUP,

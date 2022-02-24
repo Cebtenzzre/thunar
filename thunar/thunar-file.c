@@ -123,6 +123,7 @@ static gboolean           thunar_file_same_filesystem          (const ThunarFile
 G_LOCK_DEFINE_STATIC (file_cache_mutex);
 G_LOCK_DEFINE_STATIC (file_content_type_mutex);
 G_LOCK_DEFINE_STATIC (file_rename_mutex);
+G_LOCK_DEFINE_STATIC (file_trash_loaded_mutex);
 
 
 
@@ -149,6 +150,7 @@ typedef enum
   THUNAR_FILE_FLAG_THUMB_MASK     = 0x03,   /* storage for ThunarFileThumbState */
   THUNAR_FILE_FLAG_IN_DESTRUCTION = 1 << 2, /* for avoiding recursion during destroy */
   THUNAR_FILE_FLAG_IS_MOUNTED     = 1 << 3, /* whether this file is mounted */
+  THUNAR_FILE_FLAG_TRASH_LOADED   = 1 << 4, /* whether the trash info has been loaded */
 }
 ThunarFileFlags;
 
@@ -167,6 +169,7 @@ struct _ThunarFile
   /* storage for the file information */
   GFileInfo            *info;
   GFileInfo            *recent_info;
+  GFileInfo            *trash_info;
   GFileType             kind;
   GFile                *gfile;
   gchar                *content_type;
@@ -194,6 +197,9 @@ struct _ThunarFile
   guint                 file_count;
   guint64               file_count_timestamp;
 
+  /* async */
+  GCond                 trash_loaded_cond;
+  GCancellable         *trash_loaded_cancellable;
 };
 
 typedef struct
@@ -433,6 +439,14 @@ thunar_file_dispose (GObject *object)
 
 
 
+static inline gboolean
+thunar_file_is_trash_root (const ThunarFile *file)
+{
+  return g_file_has_uri_scheme (file->gfile, "trash") && thunar_g_file_is_root (file->gfile);
+}
+
+
+
 static void
 thunar_file_finalize (GObject *object)
 {
@@ -448,6 +462,16 @@ thunar_file_finalize (GObject *object)
     }
 #endif
 
+  /* cancel trash loading */
+  if (thunar_file_is_trash_root (file))
+    {
+      g_cancellable_cancel (file->trash_loaded_cancellable);
+      G_LOCK (file_trash_loaded_mutex);
+      while (!(file->flags & THUNAR_FILE_FLAG_TRASH_LOADED))
+        g_cond_wait (&file->trash_loaded_cond, &G_LOCK_NAME (file_trash_loaded_mutex));
+      G_UNLOCK (file_trash_loaded_mutex);
+    }
+
   /* drop the entry from the cache */
   G_LOCK (file_cache_mutex);
   g_hash_table_remove (file_cache, file->gfile);
@@ -456,6 +480,8 @@ thunar_file_finalize (GObject *object)
   /* release file info */
   if (file->info != NULL)
     g_object_unref (file->info);
+  if (file->trash_info != NULL)
+    g_object_unref (file->trash_info);
 
   /* release file info */
   if (file->recent_info != NULL)
@@ -479,6 +505,11 @@ thunar_file_finalize (GObject *object)
 
   /* free the thumbnail path */
   g_free (file->thumbnail_path);
+
+  /* free async */
+  g_cond_clear (&file->trash_loaded_cond);
+  if (file->trash_loaded_cancellable != NULL)
+    g_object_unref (file->trash_loaded_cancellable);
 
   /* release file */
   g_object_unref (file->gfile);
@@ -1175,6 +1206,30 @@ thunar_file_get_async_finish (GObject      *object,
 
 
 
+static void
+thunar_trash_load_finish (GObject      *object,
+                          GAsyncResult *result,
+                          gpointer      user_data)
+{
+  ThunarFile *file = user_data;
+  GFile      *location = G_FILE (object);
+
+  _thunar_return_if_fail (G_IS_FILE (location));
+  _thunar_return_if_fail (G_IS_ASYNC_RESULT (result));
+
+  /* finish querying the file information */
+  G_LOCK (file_trash_loaded_mutex);
+  file->trash_info = g_file_query_info_finish (location, result, NULL);
+  file->flags |= THUNAR_FILE_FLAG_TRASH_LOADED;
+  g_cond_broadcast (&file->trash_loaded_cond);
+  G_UNLOCK (file_trash_loaded_mutex);
+
+  /* release the get data */
+  g_object_unref (file);
+}
+
+
+
 /**
  * thunar_file_load:
  * @file        : a #ThunarFile.
@@ -1232,6 +1287,24 @@ thunar_file_load (ThunarFile   *file,
     {
       g_propagate_error (error, err);
       return FALSE;
+    }
+
+  if (thunar_file_is_trash_root (file))
+    {
+      /* load the trash information asynchronously */
+      g_object_ref (file);
+      g_cond_init (&file->trash_loaded_cond);
+      if (cancellable != NULL)
+        file->trash_loaded_cancellable = g_object_ref (cancellable);
+      else
+        file->trash_loaded_cancellable = g_cancellable_new ();
+      g_file_query_info_async (file->gfile,
+                               G_FILE_ATTRIBUTE_TRASH_ITEM_COUNT,
+                               G_FILE_QUERY_INFO_NONE,
+                               G_PRIORITY_DEFAULT,
+                               file->trash_loaded_cancellable,
+                               thunar_trash_load_finish,
+                               file);
     }
 
   /* (re)insert the file into the cache */
@@ -3417,15 +3490,32 @@ thunar_file_get_original_path (const ThunarFile *file)
  *               root dir, 0 otherwise.
  **/
 guint32
-thunar_file_get_item_count (const ThunarFile *file)
+thunar_file_get_item_count (ThunarFile *file, gboolean block)
 {
+  GFileInfo *info;
+
   _thunar_return_val_if_fail (THUNAR_IS_FILE (file), 0);
 
-  if (file->info == NULL)
+  if (!thunar_file_is_trash_root (file))
     return 0;
 
-  return g_file_info_get_attribute_uint32 (file->info,
-                                           G_FILE_ATTRIBUTE_TRASH_ITEM_COUNT);
+  info = file->trash_info;
+  if (info == NULL)
+    {
+      if (!block)
+        return -1;
+
+      G_LOCK (file_trash_loaded_mutex);
+      while (!(file->flags & THUNAR_FILE_FLAG_TRASH_LOADED))
+        g_cond_wait (&file->trash_loaded_cond, &G_LOCK_NAME (file_trash_loaded_mutex));
+      info = file->trash_info;
+      G_UNLOCK (file_trash_loaded_mutex);
+
+      if (info == NULL)
+        return 0;
+    }
+
+  return g_file_info_get_attribute_uint32 (info, G_FILE_ATTRIBUTE_TRASH_ITEM_COUNT);
 }
 
 
@@ -3991,6 +4081,9 @@ thunar_file_get_preview_type (const ThunarFile *file)
   _thunar_return_val_if_fail (THUNAR_IS_FILE (file), G_FILESYSTEM_PREVIEW_TYPE_NEVER);
   _thunar_return_val_if_fail (G_IS_FILE (file->gfile), G_FILESYSTEM_PREVIEW_TYPE_NEVER);
 
+  if (thunar_file_is_trash_root (file))
+    return G_FILESYSTEM_PREVIEW_TYPE_IF_LOCAL; // trash may be busy, hardcode this value
+
   info = g_file_query_filesystem_info (file->gfile, G_FILE_ATTRIBUTE_FILESYSTEM_USE_PREVIEW, NULL, NULL);
   if (G_LIKELY (info != NULL))
     {
@@ -4097,7 +4190,7 @@ thunar_file_get_icon_name (ThunarFile          *file,
         {
           if (g_file_has_uri_scheme (file->gfile, "trash"))
             {
-              special_names[0] = thunar_file_get_item_count (file) > 0 ? "user-trash-full" : "user-trash";
+              special_names[0] = thunar_file_get_item_count (file, FALSE) > 0 ? "user-trash-full" : "user-trash";
               special_names[1] = "user-trash";
             }
           else if (g_file_has_uri_scheme (file->gfile, "network"))
@@ -4234,7 +4327,7 @@ thunar_file_get_device_type (ThunarFile *file)
  * will abort.
  **/
 void
-thunar_file_watch (ThunarFile *file)
+thunar_file_watch_ex (ThunarFile *file, GCancellable *cancellable)
 {
   ThunarFileWatch *file_watch;
   GError          *error = NULL;
@@ -4249,7 +4342,7 @@ thunar_file_watch (ThunarFile *file)
 
       /* create a file or directory monitor */
       file_watch->monitor = g_file_monitor (file->gfile, G_FILE_MONITOR_WATCH_MOUNTS |
-                                            G_FILE_MONITOR_WATCH_MOVES, NULL, &error);
+                                            G_FILE_MONITOR_WATCH_MOVES, cancellable, &error);
 
       if (G_UNLIKELY (file_watch->monitor == NULL))
         {
@@ -4272,6 +4365,14 @@ thunar_file_watch (ThunarFile *file)
       _thunar_return_if_fail (G_IS_FILE_MONITOR (file_watch->monitor));
       file_watch->watch_count++;
     }
+}
+
+
+
+void
+thunar_file_watch (ThunarFile *file)
+{
+  return thunar_file_watch_ex (file, NULL);
 }
 
 

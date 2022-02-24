@@ -228,7 +228,8 @@ gchar            *thunar_file_get_recency                (const ThunarFile      
                                                           ThunarDateStyle         date_style,
                                                           const gchar            *date_custom_style) G_GNUC_MALLOC G_GNUC_WARN_UNUSED_RESULT;
 const gchar      *thunar_file_get_original_path          (const ThunarFile       *file);
-guint32           thunar_file_get_item_count             (const ThunarFile       *file);
+guint32           thunar_file_get_item_count             (ThunarFile             *file,
+                                                          gboolean                block);
 
 gboolean          thunar_file_is_chmodable               (const ThunarFile       *file);
 gboolean          thunar_file_is_renameable              (const ThunarFile       *file);
@@ -264,6 +265,8 @@ const gchar      *thunar_file_get_icon_name              (ThunarFile            
                                                           GtkIconTheme            *icon_theme);
 const gchar      *thunar_file_get_device_type            (ThunarFile              *file);
 
+void              thunar_file_watch_ex                   (ThunarFile              *file,
+                                                          GCancellable            *cancellable);
 void              thunar_file_watch                      (ThunarFile              *file);
 void              thunar_file_unwatch                    (ThunarFile              *file);
 

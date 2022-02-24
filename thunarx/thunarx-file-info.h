@@ -45,7 +45,7 @@ G_BEGIN_DECLS
   "standard::is-symlink,standard::name,standard::display-name," \
   "standard::size,standard::symlink-target," \
   "time::*," \
-  "trash::*," \
+  "trash::deletion-date,trash::orig-path," \
   "recent::*," \
   "unix::gid,unix::uid,unix::mode," \
   "metadata::emblems," \

@@ -153,6 +153,11 @@ static void               thunar_shortcut_free                      (ThunarShort
 
 
 
+G_LOCK_DEFINE_STATIC (shortcut_watch_mutex);
+static GCond shortcut_watch_cond;
+
+
+
 struct _ThunarShortcutsModelClass
 {
   GObjectClass __parent__;
@@ -204,6 +209,8 @@ struct _ThunarShortcut
   ThunarDevice        *device;
 
   guint                hidden : 1;
+
+  GCancellable        *watch_cancellable;
 };
 
 
@@ -687,11 +694,11 @@ thunar_shortcuts_model_get_value (GtkTreeModel *tree_model,
         }
       else if ((shortcut->group & THUNAR_SHORTCUT_GROUP_PLACES_TRASH) != 0)
         {
-          trash_items = thunar_file_get_item_count (shortcut->file);
-          if (trash_items == 0)
-            {
-              g_value_set_static_string (value, _("Trash is empty"));
-            }
+          trash_items = thunar_file_get_item_count (shortcut->file, FALSE);
+          if (trash_items == -1)
+            g_value_set_static_string (value, _("Trash is loading..."));
+          else if (trash_items == 0)
+            g_value_set_static_string (value, _("Trash is empty"));
           else
             {
               tooltip = g_strdup_printf (ngettext ("Trash contains %d file",
@@ -1236,6 +1243,19 @@ thunar_shortcuts_model_sort_func (gconstpointer shortcut_a,
 
 
 static void
+create_trash_watch (GTask *task, gpointer source_object, gpointer user_data, GCancellable *cancellable)
+{
+  ThunarShortcut *shortcut = user_data;
+  thunar_file_watch_ex (shortcut->file, cancellable);
+  G_LOCK (shortcut_watch_mutex);
+  g_clear_object (&shortcut->watch_cancellable);
+  g_cond_broadcast (&shortcut_watch_cond);
+  G_UNLOCK (shortcut_watch_mutex);
+}
+
+
+
+static void
 thunar_shortcuts_model_add_shortcut_with_path (ThunarShortcutsModel *model,
                                                ThunarShortcut       *shortcut,
                                                GtkTreePath          *path)
@@ -1249,8 +1269,16 @@ thunar_shortcuts_model_add_shortcut_with_path (ThunarShortcutsModel *model,
   if (G_LIKELY (shortcut->file != NULL))
     {
       /* watch the trash for changes */
-      if (thunar_file_is_trash (shortcut->file))
-        thunar_file_watch (shortcut->file);
+      if (thunar_file_is_trash (shortcut->file) && shortcut->watch_cancellable == NULL)
+        {
+          GTask *task;
+
+          shortcut->watch_cancellable = g_cancellable_new ();
+          task = g_task_new (model, shortcut->watch_cancellable, NULL, NULL);
+          g_task_set_task_data (task, shortcut, NULL);
+          g_task_run_in_thread (task, create_trash_watch);
+          g_object_unref (task);
+        }
     }
 
   if (path == NULL)
@@ -1784,14 +1812,23 @@ static void
 thunar_shortcut_free (ThunarShortcut       *shortcut,
                       ThunarShortcutsModel *model)
 {
-  if (G_LIKELY (shortcut->file != NULL))
+  if (G_UNLIKELY (shortcut->watch_cancellable != NULL))
     {
-      /* drop the file watch on trash */
-      if (thunar_file_is_trash (shortcut->file))
-        thunar_file_unwatch (shortcut->file);
+      g_assert (thunar_file_is_trash (shortcut->file));
 
-      g_object_unref (shortcut->file);
+      g_cancellable_cancel (shortcut->watch_cancellable);
+
+      G_LOCK (shortcut_watch_mutex);
+      while (shortcut->watch_cancellable != NULL)
+        g_cond_wait (&shortcut_watch_cond, &G_LOCK_NAME (shortcut_watch_mutex));
+      G_UNLOCK (shortcut_watch_mutex);
+
+      /* drop the file watch on trash */
+      thunar_file_unwatch (shortcut->file);
     }
+
+  if (G_LIKELY (shortcut->file != NULL))
+    g_object_unref (shortcut->file);
 
   if (G_LIKELY (shortcut->device != NULL))
     g_object_unref (shortcut->device);

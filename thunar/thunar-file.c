@@ -86,6 +86,7 @@ enum
 
 
 
+static ThunarFile        *thunar_file_cache_lookup_unlocked    (const GFile *file);
 static void               thunar_file_info_init                (ThunarxFileInfoIface   *iface);
 static void               thunar_file_dispose                  (GObject                *object);
 static void               thunar_file_finalize                 (GObject                *object);
@@ -113,7 +114,8 @@ static void               thunar_file_monitor                  (GFileMonitor    
 static void               thunar_file_watch_reconnect          (ThunarFile             *file);
 static gboolean           thunar_file_load                     (ThunarFile             *file,
                                                                 GCancellable           *cancellable,
-                                                                GError                **error);
+                                                                GError                **error,
+                                                                gboolean                lock);
 static gboolean           thunar_file_is_readable              (const ThunarFile       *file);
 static gboolean           thunar_file_same_filesystem          (const ThunarFile       *file_a,
                                                                 const ThunarFile       *file_b);
@@ -781,7 +783,7 @@ thunar_file_monitor_moved (ThunarFile *file,
   file->gfile = G_FILE (g_object_ref (G_OBJECT (renamed_file)));
 
   /* reload file information */
-  thunar_file_load (file, NULL, NULL);
+  thunar_file_load (file, NULL, NULL, TRUE);
 
   /* need to re-register the monitor handle for the new uri */
   thunar_file_watch_reconnect (file);
@@ -1247,7 +1249,8 @@ thunar_trash_load_finish (GObject      *object,
 static gboolean
 thunar_file_load (ThunarFile   *file,
                   GCancellable *cancellable,
-                  GError      **error)
+                  GError      **error,
+                  gboolean      lock)
 {
   GError *err = NULL;
 
@@ -1256,11 +1259,12 @@ thunar_file_load (ThunarFile   *file,
   _thunar_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), FALSE);
   _thunar_return_val_if_fail (G_IS_FILE (file->gfile), FALSE);
 
+  if (lock)
+    G_LOCK (file_cache_mutex);
+
   /* remove the file from cache */
-  G_LOCK (file_cache_mutex);
   if (g_hash_table_lookup (file_cache, file->gfile) != NULL)
     g_hash_table_remove (file_cache, file->gfile);
-  G_UNLOCK (file_cache_mutex);
 
   /* reset the file */
   thunar_file_info_clear (file);
@@ -1285,6 +1289,8 @@ thunar_file_load (ThunarFile   *file,
 
   if (err != NULL)
     {
+      if (lock)
+        G_UNLOCK (file_cache_mutex);
       g_propagate_error (error, err);
       return FALSE;
     }
@@ -1310,12 +1316,12 @@ thunar_file_load (ThunarFile   *file,
   /* (re)insert the file into the cache */
   if (file != NULL && file->kind != G_FILE_TYPE_UNKNOWN)
     {
-      G_LOCK (file_cache_mutex);
       g_hash_table_insert (file_cache,
                            g_object_ref (file->gfile),
                            weak_ref_new (G_OBJECT (file)));
-      G_UNLOCK (file_cache_mutex);
     }
+  if (lock)
+    G_UNLOCK (file_cache_mutex);
   return TRUE;
 }
 
@@ -1340,11 +1346,15 @@ thunar_file_get (GFile   *gfile,
                  GError **error)
 {
   ThunarFile *file;
+  gboolean    unref = FALSE;
 
   _thunar_return_val_if_fail (G_IS_FILE (gfile), NULL);
 
+  /* setup lock until the file is inserted */
+  G_LOCK (file_cache_mutex);
+
   /* check if we already have a cached version of that file */
-  file = thunar_file_cache_lookup (gfile);
+  file = thunar_file_cache_lookup_unlocked (gfile);
   if (G_UNLIKELY (file != NULL))
     {
       /* return the file, it already has an additional ref set
@@ -1356,27 +1366,25 @@ thunar_file_get (GFile   *gfile,
       file = g_object_new (THUNAR_TYPE_FILE, NULL);
       file->gfile = g_object_ref (gfile);
 
-      if (thunar_file_load (file, NULL, error))
+      if (thunar_file_load (file, NULL, error, FALSE))
         {
-          /* setup lock until the file is inserted */
-          G_LOCK (file_cache_mutex);
-
           /* insert the file into the cache */
-          g_hash_table_insert (file_cache,
-                               g_object_ref (file->gfile),
-                               weak_ref_new (G_OBJECT (file)));
-
-          /* done inserting in the cache */
-          G_UNLOCK (file_cache_mutex);
         }
       else
         {
           /* failed loading, destroy the file */
-          g_object_unref (file);
-
-          /* make sure we return NULL */
-          file = NULL;
+          unref = TRUE;
         }
+    }
+
+  /* done inserting in the cache */
+  G_UNLOCK (file_cache_mutex);
+
+  /* unref without lock held */
+  if (unref)
+    {
+      g_object_unref (file);
+      file = NULL;
     }
 
   return file;
@@ -1413,8 +1421,11 @@ thunar_file_get_with_info (GFile     *gfile,
   _thunar_return_val_if_fail (G_IS_FILE (gfile), NULL);
   _thunar_return_val_if_fail (G_IS_FILE_INFO (info), NULL);
 
+  /* setup lock until the file is inserted */
+  G_LOCK (file_cache_mutex);
+
   /* check if we already have a cached version of that file */
-  file = thunar_file_cache_lookup (gfile);
+  file = thunar_file_cache_lookup_unlocked (gfile);
   if (G_UNLIKELY (file != NULL))
     {
       /* return the file, it already has an additional ref set
@@ -1439,20 +1450,17 @@ thunar_file_get_with_info (GFile     *gfile,
       if (not_mounted)
         FLAG_UNSET (file, THUNAR_FILE_FLAG_IS_MOUNTED);
 
-      /* setup lock until the file is inserted */
-      G_LOCK (file_cache_mutex);
-
       /* insert the file into the cache */
       g_hash_table_insert (file_cache,
                            g_object_ref (file->gfile),
                            weak_ref_new (G_OBJECT (file)));
-
-      /* done inserting in the cache */
-      G_UNLOCK (file_cache_mutex);
     }
     
   if (recent_info != NULL)
     file->recent_info = g_object_ref (recent_info);
+
+  /* done inserting in the cache */
+  G_UNLOCK (file_cache_mutex);
 
   return file;
 }
@@ -1638,7 +1646,7 @@ thunar_file_check_loaded (ThunarFile *file)
   _thunar_return_val_if_fail (THUNAR_IS_FILE (file), FALSE);
 
   if (G_UNLIKELY (file->info == NULL))
-    thunar_file_load (file, NULL, NULL);
+    thunar_file_load (file, NULL, NULL, TRUE);
 
   return (file->info != NULL);
 }
@@ -4431,7 +4439,7 @@ thunar_file_reload (ThunarFile *file)
   /* clear file pxmap cache */
   thunar_icon_factory_clear_pixmap_cache (file);
 
-  if (!thunar_file_load (file, NULL, NULL))
+  if (!thunar_file_load (file, NULL, NULL, TRUE))
     {
       /* destroy the file if we cannot query any file information */
       thunar_file_destroy (file);
@@ -4691,15 +4699,13 @@ thunar_file_same_filesystem (const ThunarFile *file_a,
  *               cache, or %NULL. If you are done with the
  *               file, use g_object_unref to release.
  **/
-ThunarFile *
-thunar_file_cache_lookup (const GFile *file)
+static ThunarFile *
+thunar_file_cache_lookup_unlocked (const GFile *file)
 {
   GWeakRef   *ref;
   ThunarFile *cached_file;
 
   _thunar_return_val_if_fail (G_IS_FILE (file), NULL);
-
-  G_LOCK (file_cache_mutex);
 
   /* allocate the ThunarFile cache on-demand */
   if (G_UNLIKELY (file_cache == NULL))
@@ -4717,8 +4723,18 @@ thunar_file_cache_lookup (const GFile *file)
   else
     cached_file = g_weak_ref_get (ref);
 
-  G_UNLOCK (file_cache_mutex);
+  return cached_file;
+}
 
+
+
+ThunarFile *
+thunar_file_cache_lookup (const GFile *file)
+{
+  ThunarFile *cached_file;
+  G_LOCK (file_cache_mutex);
+  cached_file = thunar_file_cache_lookup_unlocked (file);
+  G_UNLOCK (file_cache_mutex);
   return cached_file;
 }
 

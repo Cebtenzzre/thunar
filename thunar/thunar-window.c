@@ -1995,6 +1995,18 @@ thunar_window_action_switch_previous_tab (ThunarWindow *window)
 
 
 
+static gboolean
+thunar_window_reload_timeout (gpointer user_data)
+{
+  ThunarWindow *window = THUNAR_WINDOW (user_data);
+
+  thunar_window_reload (window, FALSE);
+  g_object_unref (window);
+  return FALSE;
+}
+
+
+
 static void
 thunar_window_clipboard_manager_changed (GtkWidget *widget)
 {
@@ -2004,7 +2016,10 @@ thunar_window_clipboard_manager_changed (GtkWidget *widget)
    * in order to do not trigger if just some text is copied.
    */
   if (thunar_clipboard_manager_get_can_paste (window->clipboard))
-    thunar_window_reload (window, FALSE);
+    {
+      g_object_ref (window);
+      g_timeout_add_full (G_PRIORITY_DEFAULT_IDLE, 50, thunar_window_reload_timeout, window, NULL);
+    }
 }
 
 

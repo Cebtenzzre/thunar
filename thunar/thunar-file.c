@@ -441,14 +441,6 @@ thunar_file_dispose (GObject *object)
 
 
 
-static inline gboolean
-thunar_file_is_trash_root (const ThunarFile *file)
-{
-  return g_file_has_uri_scheme (file->gfile, "trash") && thunar_g_file_is_root (file->gfile);
-}
-
-
-
 static void
 thunar_file_finalize (GObject *object)
 {
@@ -5129,4 +5121,10 @@ thunar_file_has_directory_specific_settings (ThunarFile *file)
     return TRUE;
 
   return FALSE;
+}
+
+gboolean
+thunar_file_is_trash_root (const ThunarFile *file)
+{
+  return g_file_has_uri_scheme (file->gfile, "trash") && thunar_g_file_is_root (file->gfile);
 }

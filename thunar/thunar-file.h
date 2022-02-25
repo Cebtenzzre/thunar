@@ -302,6 +302,7 @@ void              thunar_file_clear_metadata_setting     (ThunarFile            
                                                           const gchar            *setting_name);
 void              thunar_file_clear_directory_specific_settings (ThunarFile      *file);
 gboolean          thunar_file_has_directory_specific_settings   (ThunarFile      *file);
+gboolean          thunar_file_is_trash_root              (const ThunarFile *file);
 
 /**
  * thunar_file_is_root:

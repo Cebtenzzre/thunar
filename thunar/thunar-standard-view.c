@@ -1921,9 +1921,11 @@ thunar_standard_view_apply_directory_specific_settings (ThunarStandardView *stan
   ThunarColumn sort_column;
   GtkSortType  sort_order;
   gint         zoom_level;
+  gboolean     folders_first;
 
   /* get the default sort column and sort order */
-  g_object_get (G_OBJECT (standard_view->preferences), "last-sort-column", &sort_column, "last-sort-order", &sort_order, NULL);
+  g_object_get (G_OBJECT (standard_view->preferences), "last-sort-column", &sort_column, "last-sort-order", &sort_order,
+                "misc-folders-first", &folders_first, NULL);
 
   /* get the stored directory specific settings (if any) */
   sort_column_name = thunar_file_get_metadata_setting (directory, "sort-column");
@@ -1963,6 +1965,7 @@ thunar_standard_view_apply_directory_specific_settings (ThunarStandardView *stan
                                         standard_view);
 
   /* apply the sort column and sort order */
+  thunar_list_model_set_folders_first (standard_view->model, folders_first && !thunar_file_is_trash_root (directory));
   gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (standard_view->model), sort_column, sort_order);
 
   /* keep the currently selected files selected after the change */

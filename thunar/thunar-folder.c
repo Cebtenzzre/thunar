@@ -121,12 +121,16 @@ struct _ThunarFolder
   ThunarFileMonitor *file_monitor;
 
   GFileMonitor      *monitor;
+  GCancellable      *watch_cancellable;
+  gulong             reload_idle_id;
 };
 
 
 
 static guint  folder_signals[LAST_SIGNAL];
 static GQuark thunar_folder_quark;
+G_LOCK_DEFINE_STATIC (folder_watch_mutex);
+static GCond folder_watch_cond;
 
 
 
@@ -135,21 +139,40 @@ G_DEFINE_TYPE (ThunarFolder, thunar_folder, G_TYPE_OBJECT)
 
 
 static void
-thunar_folder_constructed (GObject *object)
+create_folder_watch (GTask *task, gpointer source_object, gpointer user_data, GCancellable *cancellable)
 {
-  ThunarFolder *folder = THUNAR_FOLDER (object);
+  ThunarFolder *folder = THUNAR_FOLDER (source_object);
   GError       *error  = NULL;
 
   folder->monitor = g_file_monitor_directory (thunar_file_get_file (folder->corresponding_file),
                                               G_FILE_MONITOR_WATCH_MOVES, NULL, &error);
 
   if (G_LIKELY (folder->monitor != NULL))
-      g_signal_connect (folder->monitor, "changed", G_CALLBACK (thunar_folder_monitor), folder);
+    g_signal_connect (folder->monitor, "changed", G_CALLBACK (thunar_folder_monitor), folder);
   else
     {
       g_debug ("Could not create folder monitor: %s", error->message);
       g_error_free (error);
     }
+
+  G_LOCK (folder_watch_mutex);
+  g_clear_object (&folder->watch_cancellable);
+  g_cond_broadcast (&folder_watch_cond);
+  G_UNLOCK (folder_watch_mutex);
+}
+
+
+
+static void
+thunar_folder_constructed (GObject *object)
+{
+  ThunarFolder *folder = THUNAR_FOLDER (object);
+  GTask        *task;
+
+  folder->watch_cancellable = g_cancellable_new ();
+  task = g_task_new (folder, folder->watch_cancellable, NULL, NULL);
+  g_task_run_in_thread (task, create_folder_watch);
+  g_object_unref (task);
 
   G_OBJECT_CLASS (thunar_folder_parent_class)->constructed (object);
 }
@@ -307,6 +330,22 @@ thunar_folder_finalize (GObject *object)
   /* disconnect from the ThunarFileMonitor instance */
   g_signal_handlers_disconnect_matched (folder->file_monitor, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, folder);
   g_object_unref (folder->file_monitor);
+
+  if (G_UNLIKELY (folder->reload_idle_id != 0))
+    {
+      g_source_remove (folder->reload_idle_id);
+      folder->reload_idle_id = 0;
+    }
+
+  if (G_UNLIKELY (folder->watch_cancellable != NULL))
+    {
+      g_cancellable_cancel (folder->watch_cancellable);
+
+      G_LOCK (folder_watch_mutex);
+      while (folder->watch_cancellable != NULL)
+        g_cond_wait (&folder_watch_cond, &G_LOCK_NAME (folder_watch_mutex));
+      G_UNLOCK (folder_watch_mutex);
+    }
 
   /* disconnect from the file alteration monitor */
   if (G_LIKELY (folder->monitor != NULL))
@@ -980,19 +1019,45 @@ thunar_folder_get_loading (const ThunarFolder *folder)
 
 
 
-/**
- * thunar_folder_has_folder_monitor:
- * @folder : a #ThunarFolder instance.
- *
- * Tells whether the @folder has a folder monitor running
- *
- * Return value: %TRUE if @folder has a folder monitor, else %FALSE.
- **/
-gboolean
-thunar_folder_has_folder_monitor (const ThunarFolder *folder)
+static gboolean
+thunar_folder_reload_idle (gpointer user_data)
 {
-  _thunar_return_val_if_fail (THUNAR_IS_FOLDER (folder), FALSE);
-  return (folder->monitor != NULL);
+  ThunarFolder *folder = THUNAR_FOLDER (user_data);
+
+  /* If the folder is connected to a folder monitor, we dont need to trigger the reload manually */
+  G_LOCK (folder_watch_mutex);
+  if (folder->watch_cancellable != NULL)
+    {
+      G_UNLOCK (folder_watch_mutex);
+      return TRUE;
+    }
+
+  if (folder->monitor == NULL)
+    thunar_folder_reload (folder, FALSE);
+  G_UNLOCK (folder_watch_mutex);
+
+  return FALSE;
+}
+
+
+
+void
+thunar_folder_reload_if_needed (ThunarFolder *folder)
+{
+  _thunar_return_if_fail (THUNAR_IS_FOLDER (folder));
+
+  G_LOCK (folder_watch_mutex);
+  if (folder->watch_cancellable != NULL)
+    {
+      G_UNLOCK (folder_watch_mutex);
+      if (folder->reload_idle_id == 0)
+        folder->reload_idle_id = g_idle_add (thunar_folder_reload_idle, folder);
+      return;
+    }
+
+  if (folder->monitor == NULL)
+    thunar_folder_reload (folder, FALSE);
+  G_UNLOCK (folder_watch_mutex);
 }
 
 

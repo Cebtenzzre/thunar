@@ -2127,7 +2127,7 @@ thunar_file_accepts_drop (ThunarFile     *file,
        * we should copy or move by default by checking whether the source and target are on the same disk.
        */
       if ((actions & (GDK_ACTION_COPY | GDK_ACTION_MOVE)) != 0
-          && (suggested_action == GDK_ACTION_COPY))
+          && (suggested_action == GDK_ACTION_COPY) && FALSE)
         {
           /* default to move as suggested action */
           suggested_action = GDK_ACTION_MOVE;
@@ -2167,6 +2167,11 @@ thunar_file_accepts_drop (ThunarFile     *file,
               if (ofile != NULL)
                 g_object_unref (ofile);
             }
+        }
+      if (actions == (GDK_ACTION_COPY | GDK_ACTION_MOVE | GDK_ACTION_ASK))
+        {
+          /* prefer copy over move when given the choice */
+          suggested_action = GDK_ACTION_COPY;
         }
     }
   else if (thunar_file_can_execute (file))

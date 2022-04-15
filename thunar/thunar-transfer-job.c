@@ -402,12 +402,25 @@ thunar_transfer_job_collect_node (ThunarTransferJob  *job,
   info = g_file_query_info (node->source_file,
                             G_FILE_ATTRIBUTE_STANDARD_SIZE ","
                             G_FILE_ATTRIBUTE_STANDARD_TYPE,
-                            G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                            G_FILE_QUERY_INFO_NONE,
                             exo_job_get_cancellable (EXO_JOB (job)),
                             &err);
 
   if (G_UNLIKELY (info == NULL))
     return FALSE;
+
+  if (g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR)
+    {
+      info = g_file_query_info (node->source_file,
+                                G_FILE_ATTRIBUTE_STANDARD_SIZE ","
+                                G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                exo_job_get_cancellable (EXO_JOB (job)),
+                                &err);
+
+      if (G_UNLIKELY (info == NULL))
+        return FALSE;
+    }
 
   job->total_size += g_file_info_get_size (info);
 
@@ -707,9 +720,10 @@ thunar_transfer_job_copy_file (ThunarTransferJob     *job,
 {
   ThunarJobResponse response;
   GFile            *dest_file = target_file;
-  GFileCopyFlags    copy_flags = G_FILE_COPY_NOFOLLOW_SYMLINKS;
+  GFileCopyFlags    copy_flags = G_FILE_COPY_NONE;
   GError           *err = NULL;
   gint              n_rename = 0;
+  GFileType         source_type;
 
   _thunar_return_val_if_fail (THUNAR_IS_TRANSFER_JOB (job), NULL);
   _thunar_return_val_if_fail (G_IS_FILE (source_file), NULL);
@@ -719,6 +733,15 @@ thunar_transfer_job_copy_file (ThunarTransferJob     *job,
   /* abort on cancellation */
   if (exo_job_set_error_if_cancelled (EXO_JOB (job), error))
     return NULL;
+  thunar_transfer_job_check_pause (job);
+
+  source_type = g_file_query_file_type (source_file, G_FILE_QUERY_INFO_NONE,
+                                        exo_job_get_cancellable (EXO_JOB (job)));
+
+  if (exo_job_set_error_if_cancelled (EXO_JOB (job), error))
+    return NULL;
+  if (source_type != G_FILE_TYPE_REGULAR)
+    copy_flags |= G_FILE_COPY_NOFOLLOW_SYMLINKS;
 
   /* various attempts to copy the file */
   while (err == NULL)

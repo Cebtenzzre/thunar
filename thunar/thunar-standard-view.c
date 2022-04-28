@@ -390,6 +390,8 @@ struct _ThunarStandardViewPrivate
 
   /* used to restore the view type after a search is completed */
   GType                   type;
+
+  gboolean                last_show_hidden;
 };
 
 static XfceGtkActionEntry thunar_standard_view_action_entries[] =
@@ -1842,6 +1844,7 @@ static void
 thunar_standard_view_set_show_hidden (ThunarView *view,
                                       gboolean    show_hidden)
 {
+  THUNAR_STANDARD_VIEW (view)->priv->last_show_hidden = show_hidden;
   thunar_list_model_set_show_hidden (THUNAR_STANDARD_VIEW (view)->model, show_hidden);
 }
 
@@ -1967,6 +1970,10 @@ thunar_standard_view_apply_directory_specific_settings (ThunarStandardView *stan
   /* apply the sort column and sort order */
   thunar_list_model_set_folders_first (standard_view->model, folders_first && !thunar_file_is_trash_root (directory));
   gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (standard_view->model), sort_column, sort_order);
+
+  /* don't hide hidden files in the trash */
+  thunar_list_model_set_show_hidden (standard_view->model,
+                                     standard_view->priv->last_show_hidden || thunar_file_is_trash_root (directory));
 
   /* keep the currently selected files selected after the change */
   thunar_component_restore_selection (THUNAR_COMPONENT (standard_view));

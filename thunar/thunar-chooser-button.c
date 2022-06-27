@@ -76,6 +76,7 @@ static gboolean thunar_chooser_button_row_separator     (GtkTreeModel        *mo
                                                          gpointer             data);
 static void     thunar_chooser_button_chooser_dialog    (ThunarChooserButton *chooser_button);
 static void     thunar_chooser_button_file_changed      (ThunarChooserButton *chooser_button,
+                                                         gint                 reason,
                                                          ThunarFile          *file);
 
 
@@ -399,7 +400,7 @@ thunar_chooser_button_chooser_dialog (ThunarChooserButton *chooser_button)
   gtk_window_set_transient_for (GTK_WINDOW (dialog), GTK_WINDOW (toplevel));
   gtk_window_set_modal (GTK_WINDOW (dialog), TRUE);
   if (gtk_dialog_run (GTK_DIALOG (dialog)) != GTK_RESPONSE_ACCEPT)
-    thunar_chooser_button_file_changed (chooser_button, chooser_button->file);
+    thunar_chooser_button_file_changed (chooser_button, -1, chooser_button->file);
   gtk_widget_destroy (dialog);
 }
 
@@ -407,6 +408,7 @@ thunar_chooser_button_chooser_dialog (ThunarChooserButton *chooser_button)
 
 static void
 thunar_chooser_button_file_changed (ThunarChooserButton *chooser_button,
+                                    gint                 reason,
                                     ThunarFile          *file)
 {
   const gchar *content_type;
@@ -573,7 +575,7 @@ thunar_chooser_button_set_file (ThunarChooserButton *chooser_button,
       g_signal_connect_swapped (G_OBJECT (file), "changed", G_CALLBACK (thunar_chooser_button_file_changed), chooser_button);
 
       /* update our state now */
-      thunar_chooser_button_file_changed (chooser_button, file);
+      thunar_chooser_button_file_changed (chooser_button, -1, file);
     }
 
   /* notify listeners */

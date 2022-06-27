@@ -78,6 +78,7 @@ static gboolean thunar_dbus_service_transfer_files              (ThunarDBusTrans
                                                                  const gchar            *startup_id,
                                                                  GError                **error);
 static void     thunar_dbus_service_trash_bin_changed           (ThunarDBusService      *dbus_service,
+                                                                 gint                    reason,
                                                                  ThunarFile             *trash_bin);
 static gboolean thunar_dbus_service_display_chooser_dialog      (ThunarDBusFileManager  *object,
                                                                  GDBusMethodInvocation  *invocation,
@@ -429,6 +430,7 @@ thunar_dbus_service_parse_uri_and_display (ThunarDBusService *dbus_service,
 
 static void
 thunar_dbus_service_trash_bin_changed (ThunarDBusService *dbus_service,
+                                       gint               reason,
                                        ThunarFile        *trash_bin)
 {
   _thunar_return_if_fail (THUNAR_IS_DBUS_SERVICE (dbus_service));

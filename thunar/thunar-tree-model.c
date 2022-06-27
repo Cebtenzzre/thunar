@@ -115,6 +115,7 @@ static gboolean             thunar_tree_model_cleanup_idle            (gpointer 
 static void                 thunar_tree_model_cleanup_idle_destroy    (gpointer                user_data);
 static void                 thunar_tree_model_file_changed            (ThunarFileMonitor      *file_monitor,
                                                                        ThunarFile             *file,
+                                                                       gint                    reason,
                                                                        ThunarTreeModel        *model);
 static void                 thunar_tree_model_device_added            (ThunarDeviceMonitor    *device_monitor,
                                                                        ThunarDevice           *device,
@@ -964,6 +965,7 @@ thunar_tree_model_cleanup_idle_destroy (gpointer user_data)
 static void
 thunar_tree_model_file_changed (ThunarFileMonitor *file_monitor,
                                 ThunarFile        *file,
+                                gint               reason,
                                 ThunarTreeModel   *model)
 {
   _thunar_return_if_fail (THUNAR_IS_FILE_MONITOR (file_monitor));

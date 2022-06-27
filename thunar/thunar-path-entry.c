@@ -121,6 +121,9 @@ static gboolean thunar_path_entry_parse                         (ThunarPathEntry
 static void     thunar_path_entry_queue_check_completion        (ThunarPathEntry      *path_entry);
 static gboolean thunar_path_entry_check_completion_idle         (gpointer              user_data);
 static void     thunar_path_entry_check_completion_idle_destroy (gpointer              user_data);
+static void     thunar_path_entry_set_current_file_ex           (ThunarPathEntry      *path_entry,
+                                                                 gint                  reason,
+                                                                 ThunarFile           *current_file);
 
 
 
@@ -302,7 +305,7 @@ thunar_path_entry_finalize (GObject *object)
   /* release the current-file reference */
   if (G_LIKELY (path_entry->current_file != NULL))
     {
-      g_signal_handlers_disconnect_by_func (G_OBJECT (path_entry->current_file), thunar_path_entry_set_current_file, path_entry);
+      g_signal_handlers_disconnect_by_func (G_OBJECT (path_entry->current_file), thunar_path_entry_set_current_file_ex, path_entry);
       g_object_unref (G_OBJECT (path_entry->current_file));
     }
 
@@ -686,14 +689,14 @@ thunar_path_entry_changed (GtkEditable *editable)
     {
       if (G_UNLIKELY (path_entry->current_file != NULL))
         {
-          g_signal_handlers_disconnect_by_func (G_OBJECT (path_entry->current_file), thunar_path_entry_set_current_file, path_entry);
+          g_signal_handlers_disconnect_by_func (G_OBJECT (path_entry->current_file), thunar_path_entry_set_current_file_ex, path_entry);
           g_object_unref (G_OBJECT (path_entry->current_file));
         }
       path_entry->current_file = current_file;
       if (G_UNLIKELY (current_file != NULL))
         {
           g_object_ref (G_OBJECT (current_file));
-          g_signal_connect_swapped (G_OBJECT (current_file), "changed", G_CALLBACK (thunar_path_entry_set_current_file), path_entry);
+          g_signal_connect_swapped (G_OBJECT (current_file), "changed", G_CALLBACK (thunar_path_entry_set_current_file_ex), path_entry);
         }
       g_object_notify (G_OBJECT (path_entry), "current-file");
 
@@ -1327,6 +1330,16 @@ thunar_path_entry_set_current_file (ThunarPathEntry *path_entry,
   gtk_editable_set_position (GTK_EDITABLE (path_entry), -1);
 
   gtk_widget_queue_draw (GTK_WIDGET (path_entry));
+}
+
+
+
+static void
+thunar_path_entry_set_current_file_ex (ThunarPathEntry *path_entry,
+                                       gint             reason,
+                                       ThunarFile      *current_file)
+{
+  return thunar_path_entry_set_current_file (path_entry, current_file);
 }
 
 

@@ -53,6 +53,7 @@ static void thunar_apr_abstract_page_set_property (GObject                    *o
                                                    const GValue               *value,
                                                    GParamSpec                 *pspec);
 static void thunar_apr_abstract_page_file_changed (ThunarAprAbstractPage      *abstract_page,
+                                                   gint                        reason,
                                                    ThunarxFileInfo            *file);
 
 
@@ -178,6 +179,7 @@ thunar_apr_abstract_page_set_property (GObject      *object,
 
 static void
 thunar_apr_abstract_page_file_changed (ThunarAprAbstractPage *abstract_page,
+                                       gint                   reason,
                                        ThunarxFileInfo       *file)
 {
   /* emit the "file-changed" signal */
@@ -242,7 +244,7 @@ thunar_apr_abstract_page_set_file (ThunarAprAbstractPage *abstract_page,
       g_object_ref (G_OBJECT (file));
 
       /* update the initial state */
-      thunar_apr_abstract_page_file_changed (abstract_page, file);
+      thunar_apr_abstract_page_file_changed (abstract_page, -1, file);
     }
 
   /* notify listeners */

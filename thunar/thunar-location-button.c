@@ -78,6 +78,7 @@ static GdkDragAction  thunar_location_button_get_dest_actions       (ThunarLocat
                                                                      guint                       timestamp);
 static void           thunar_location_button_active_changed         (ThunarLocationButton       *location_button);
 static void           thunar_location_button_file_changed           (ThunarLocationButton       *location_button,
+                                                                     gint                        reason,
                                                                      ThunarFile                 *file);
 static void           thunar_location_button_file_destroy           (ThunarLocationButton       *location_button,
                                                                      ThunarFile                 *file);
@@ -384,6 +385,7 @@ thunar_location_button_get_dest_actions (ThunarLocationButton *location_button,
 
 static void
 thunar_location_button_file_changed (ThunarLocationButton *location_button,
+                                     gint                  reason,
                                      ThunarFile           *file)
 {
   GtkIconTheme      *icon_theme;
@@ -719,7 +721,7 @@ thunar_location_button_drag_leave (GtkWidget            *button,
 
       /* update the user interface if we still have a file */
       if (G_LIKELY (location_button->file != NULL))
-        thunar_location_button_file_changed (location_button, location_button->file);
+        thunar_location_button_file_changed (location_button, -1, location_button->file);
     }
 
   /* reset the "drop data ready" status and free the path list */
@@ -799,7 +801,7 @@ thunar_location_button_drag_motion (GtkWidget            *button,
 
           /* update the user interface if we have a file */
           if (G_LIKELY (location_button->file != NULL))
-            thunar_location_button_file_changed (location_button, location_button->file);
+            thunar_location_button_file_changed (location_button, -1, location_button->file);
         }
     }
 
@@ -930,7 +932,7 @@ thunar_location_button_set_file (ThunarLocationButton *location_button,
       g_signal_connect_swapped (G_OBJECT (file), "destroy", G_CALLBACK (thunar_location_button_file_destroy), location_button);
 
       /* update our internal state for the new file */
-      thunar_location_button_file_changed (location_button, file);
+      thunar_location_button_file_changed (location_button, -1, file);
     }
 
   /* notify listeners */

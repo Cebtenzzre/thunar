@@ -105,6 +105,7 @@ static gboolean                thunar_renamer_model_iter_parent         (GtkTree
                                                                          GtkTreeIter             *child);
 static void                    thunar_renamer_model_file_changed        (ThunarRenamerModel      *renamer_model,
                                                                          ThunarFile              *file,
+                                                                         gint                     reason,
                                                                          ThunarFileMonitor       *file_monitor);
 static void                    thunar_renamer_model_file_destroyed      (ThunarRenamerModel      *renamer_model,
                                                                          ThunarFile              *file,
@@ -601,6 +602,7 @@ thunar_renamer_model_iter_parent (GtkTreeModel *tree_model,
 static void
 thunar_renamer_model_file_changed (ThunarRenamerModel *renamer_model,
                                    ThunarFile         *file,
+                                   gint                reason,
                                    ThunarFileMonitor  *file_monitor)
 {
   ThunarRenamerModelItem *item;

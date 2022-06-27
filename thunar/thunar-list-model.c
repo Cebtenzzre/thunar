@@ -145,6 +145,7 @@ static gint               thunar_list_model_cmp_func                    (gconstp
 static void               thunar_list_model_sort                        (ThunarListModel              *store);
 static void               thunar_list_model_file_changed                (ThunarFileMonitor            *file_monitor,
                                                                          ThunarFile                   *file,
+                                                                         gint                          reason,
                                                                          ThunarListModel              *store);
 static void               thunar_list_model_folder_destroy              (ThunarFolder                 *folder,
                                                                          ThunarListModel              *store);
@@ -1446,6 +1447,7 @@ thunar_list_model_sort (ThunarListModel *store)
 static void
 thunar_list_model_file_changed (ThunarFileMonitor *file_monitor,
                                 ThunarFile        *file,
+                                gint               reason,
                                 ThunarListModel   *store)
 {
   GSequenceIter *row;
@@ -3472,5 +3474,5 @@ thunar_list_model_file_count_callback (ExoJob  *job,
   if (file == NULL)
     return;
 
-  thunar_list_model_file_changed (NULL, file, THUNAR_LIST_MODEL (model));
+  thunar_list_model_file_changed (NULL, file, G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED, THUNAR_LIST_MODEL (model));
 }

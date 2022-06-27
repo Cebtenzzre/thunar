@@ -250,6 +250,7 @@ static gboolean  thunar_window_propagate_key_event        (GtkWindow            
                                                            gpointer                user_data);
 static gboolean  thunar_window_action_open_file_menu      (ThunarWindow           *window);
 static void      thunar_window_current_directory_changed  (ThunarFile             *current_directory,
+                                                           gint                    reason,
                                                            ThunarWindow           *window);
 static void      thunar_window_menu_item_selected         (ThunarWindow           *window,
                                                            GtkWidget              *menu_item);
@@ -4785,6 +4786,7 @@ thunar_window_action_open_file_menu (ThunarWindow *window)
 
 static void
 thunar_window_current_directory_changed (ThunarFile   *current_directory,
+                                         gint          reason,
                                          ThunarWindow *window)
 {
   gboolean      show_full_path;
@@ -5209,7 +5211,7 @@ thunar_window_set_current_directory (ThunarWindow *window,
       g_signal_connect (G_OBJECT (current_directory), "changed", G_CALLBACK (thunar_window_current_directory_changed), window);
 
       /* update window icon and title */
-      thunar_window_current_directory_changed (current_directory, window);
+      thunar_window_current_directory_changed (current_directory, -1, window);
 
       if (G_LIKELY (window->view != NULL))
         {

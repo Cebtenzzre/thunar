@@ -24,6 +24,7 @@
 #include <libxfce4util/libxfce4util.h>
 
 #include <thunar/thunar-file-monitor.h>
+#include <thunar/thunar-marshal.h>
 #include <thunar/thunar-private.h>
 
 
@@ -66,6 +67,7 @@ thunar_file_monitor_class_init (ThunarFileMonitorClass *klass)
    * ThunarFileMonitor::file-changed:
    * @file_monitor : the default #ThunarFileMonitor.
    * @file         : the #ThunarFile that changed.
+   * @reason       : the #GFileMonitorEvent that triggered the reload.
    *
    * This signal is emitted on @file_monitor whenever any of the currently
    * existing #ThunarFile instances changes. @file identifies the instance
@@ -76,8 +78,8 @@ thunar_file_monitor_class_init (ThunarFileMonitorClass *klass)
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_NO_HOOKS,
                   0, NULL, NULL,
-                  g_cclosure_marshal_VOID__OBJECT,
-                  G_TYPE_NONE, 1, THUNAR_TYPE_FILE);
+                  _thunar_marshal_VOID__OBJECT_INT,
+                  G_TYPE_NONE, 2, THUNAR_TYPE_FILE, G_TYPE_INT);
 
   /**
    * ThunarFileMonitor::file-destroyed:
@@ -148,19 +150,21 @@ thunar_file_monitor_get_default (void)
 
 /**
  * thunar_file_monitor_file_changed:
- * @file : a #ThunarFile.
+ * @file   : a #ThunarFile.
+ * @reason : the #GFileMonitorEvent that triggered the reload.
  *
  * Emits the ::file-changed signal on the default
  * #ThunarFileMonitor (if any). This method should
  * only be used by #ThunarFile.
  **/
 void
-thunar_file_monitor_file_changed (ThunarFile *file)
+thunar_file_monitor_file_changed (ThunarFile *file,
+                                  gint        reason)
 {
   _thunar_return_if_fail (THUNAR_IS_FILE (file));
 
   if (G_LIKELY (file_monitor_default != NULL))
-    g_signal_emit (G_OBJECT (file_monitor_default), file_monitor_signals[FILE_CHANGED], 0, file);
+    g_signal_emit (G_OBJECT (file_monitor_default), file_monitor_signals[FILE_CHANGED], 0, file, reason);
 }
 
 

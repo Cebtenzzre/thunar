@@ -270,7 +270,8 @@ void              thunar_file_watch_ex                   (ThunarFile            
 void              thunar_file_watch                      (ThunarFile              *file);
 void              thunar_file_unwatch                    (ThunarFile              *file);
 
-gboolean          thunar_file_reload                     (ThunarFile              *file);
+gboolean          thunar_file_reload_ex                  (ThunarFile              *file,
+                                                          GFileMonitorEvent        reason);
 void              thunar_file_reload_idle                (ThunarFile              *file);
 void              thunar_file_reload_idle_unref          (ThunarFile              *file);
 void              thunar_file_reload_parent              (ThunarFile              *file);
@@ -354,10 +355,44 @@ gboolean          thunar_file_is_trash_root              (const ThunarFile *file
  * Emits the ::changed signal on @file. This function is meant to be called
  * by derived classes whenever they notice changes to the @file.
  **/
-#define thunar_file_changed(file)                         \
-G_STMT_START{                                             \
-  thunarx_file_info_changed (THUNARX_FILE_INFO ((file))); \
+#define thunar_file_changed(file)                             \
+G_STMT_START{                                                 \
+  thunarx_file_info_changed (THUNARX_FILE_INFO ((file)), -1); \
 }G_STMT_END
+
+/**
+ * thunar_file_changed_ex:
+ * @file   : a #ThunarFile instance.
+ * @reason : the #GFileMonitorEvent that triggered the change.
+ *
+ * Emits the ::changed signal on @file. This function is meant to be called
+ * by derived classes whenever they notice changes to the @file.
+ **/
+#define thunar_file_changed_ex(file, reason)                      \
+G_STMT_START{                                                     \
+  thunarx_file_info_changed (THUNARX_FILE_INFO ((file)), reason); \
+}G_STMT_END
+
+
+/**
+ * thunar_file_reload:
+ * @file : a #ThunarFile instance.
+ *
+ * Tells @file to reload its internal state, e.g. by reacquiring
+ * the file info from the underlying media.
+ *
+ * You must be able to handle the case that @file is
+ * destroyed during the reload call.
+ *
+ * Return value: As this function can be used as a callback function
+ * for thunar_file_reload_idle, it will always return FALSE to prevent
+ * being called repeatedly.
+ **/
+static inline gboolean
+thunar_file_reload (ThunarFile *file)
+{
+  return thunar_file_reload_ex (file, -1);
+}
 
 
 G_END_DECLS;

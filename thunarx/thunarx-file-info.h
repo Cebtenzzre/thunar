@@ -125,7 +125,8 @@ struct _ThunarxFileInfoIface
   /*< public >*/
 
   /* signals */
-  void (*changed) (ThunarxFileInfo *file_info);
+  void (*changed) (ThunarxFileInfo *file_info,
+                   gint             reason);
   void (*renamed) (ThunarxFileInfo *file_info);
 
   /*< private >*/
@@ -151,7 +152,8 @@ GFileInfo *thunarx_file_info_get_file_info       (ThunarxFileInfo *file_info);
 GFileInfo *thunarx_file_info_get_filesystem_info (ThunarxFileInfo *file_info);
 GFile     *thunarx_file_info_get_location        (ThunarxFileInfo *file_info);
 
-void       thunarx_file_info_changed             (ThunarxFileInfo *file_info);
+void       thunarx_file_info_changed             (ThunarxFileInfo   *file_info,
+                                                  GFileMonitorEvent  reason);
 void       thunarx_file_info_renamed             (ThunarxFileInfo *file_info);
 
 

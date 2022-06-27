@@ -174,6 +174,7 @@ static ThunarFile          *thunar_standard_view_get_drop_file              (Thu
 static void                 thunar_standard_view_current_directory_destroy  (ThunarFile               *current_directory,
                                                                              ThunarStandardView       *standard_view);
 static void                 thunar_standard_view_current_directory_changed  (ThunarFile               *current_directory,
+                                                                             gint                      reason,
                                                                              ThunarStandardView       *standard_view);
 static GList               *thunar_standard_view_get_selected_files_view    (ThunarView               *view);
 static void                 thunar_standard_view_set_selected_files_view    (ThunarView               *view,
@@ -2406,6 +2407,7 @@ thunar_standard_view_current_directory_destroy (ThunarFile         *current_dire
 
 static void
 thunar_standard_view_current_directory_changed (ThunarFile         *current_directory,
+                                                gint                reason,
                                                 ThunarStandardView *standard_view)
 {
   _thunar_return_if_fail (THUNAR_IS_STANDARD_VIEW (standard_view));
@@ -2417,7 +2419,16 @@ thunar_standard_view_current_directory_changed (ThunarFile         *current_dire
   g_object_notify_by_pspec (G_OBJECT (standard_view), standard_view_props[PROP_FULL_PARSED_PATH]);
 
   /* directory is possibly moved, schedule a thumbnail update */
-  thunar_standard_view_schedule_thumbnail_timeout (standard_view);
+  if (reason < 0)
+    return;
+  switch (reason & ~0x1000)
+    {
+    case G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED:
+    case G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
+      break;
+    default:
+      thunar_standard_view_schedule_thumbnail_timeout (standard_view);
+    }
 }
 
 

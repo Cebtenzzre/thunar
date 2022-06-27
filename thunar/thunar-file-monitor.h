@@ -38,7 +38,8 @@ GType              thunar_file_monitor_get_type       (void) G_GNUC_CONST;
 
 ThunarFileMonitor *thunar_file_monitor_get_default    (void);
 
-void               thunar_file_monitor_file_changed   (ThunarFile *file);
+void               thunar_file_monitor_file_changed   (ThunarFile *file,
+                                                       gint        reason);
 void               thunar_file_monitor_file_destroyed (ThunarFile *file);
 
 G_END_DECLS;

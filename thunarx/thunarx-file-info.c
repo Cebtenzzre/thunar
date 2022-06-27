@@ -88,8 +88,8 @@ thunarx_file_info_get_type (void)
                       G_SIGNAL_RUN_FIRST,
                       G_STRUCT_OFFSET (ThunarxFileInfoIface, changed),
                       NULL, NULL,
-                      g_cclosure_marshal_VOID__VOID,
-                      G_TYPE_NONE, 0);
+                      g_cclosure_marshal_VOID__INT,
+                      G_TYPE_NONE, 1, G_TYPE_INT);
 
       /**
        * ThunarxFileInfo::renamed:
@@ -363,6 +363,7 @@ thunarx_file_info_get_location (ThunarxFileInfo *file_info)
 /**
  * thunarx_file_info_changed:
  * @file_info : a #ThunarxFileInfo.
+ * @reason    : the #GFileMonitorEvent that triggered the change.
  *
  * Emits the ::changed signal on @file_info. This method should not
  * be invoked by Thunar plugins, instead the file manager itself
@@ -370,10 +371,10 @@ thunarx_file_info_get_location (ThunarxFileInfo *file_info)
  * change on @file_info.
  **/
 void
-thunarx_file_info_changed (ThunarxFileInfo *file_info)
+thunarx_file_info_changed (ThunarxFileInfo *file_info, GFileMonitorEvent reason)
 {
   g_return_if_fail (THUNARX_IS_FILE_INFO (file_info));
-  g_signal_emit (G_OBJECT (file_info), file_info_signals[CHANGED], 0);
+  g_signal_emit (G_OBJECT (file_info), file_info_signals[CHANGED], 0, reason);
 }
 
 

@@ -56,6 +56,7 @@ static void thunar_image_scale_changed        (GObject           *object,
                                                gpointer           user_data);
 static void thunar_image_file_changed         (ThunarFileMonitor *monitor,
                                                ThunarFile        *file,
+                                               gint               reason,
                                                ThunarImage       *image);
 static void thunar_image_update               (ThunarImage       *image);
 
@@ -224,6 +225,7 @@ thunar_image_update (ThunarImage *image)
 static void
 thunar_image_file_changed (ThunarFileMonitor *monitor,
                            ThunarFile        *file,
+                           gint               reason,
                            ThunarImage       *image)
 {
   _thunar_return_if_fail (THUNAR_IS_FILE_MONITOR (monitor));

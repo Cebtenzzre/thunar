@@ -76,6 +76,7 @@ static void     thunar_folder_finished                    (ExoJob               
                                                            ThunarFolder           *folder);
 static void     thunar_folder_file_changed                (ThunarFileMonitor      *file_monitor,
                                                            ThunarFile             *file,
+                                                           gint                    reason,
                                                            ThunarFolder           *folder);
 static void     thunar_folder_file_destroyed              (ThunarFileMonitor      *file_monitor,
                                                            ThunarFile             *file,
@@ -653,6 +654,7 @@ thunar_folder_finished (ExoJob       *job,
 static void
 thunar_folder_file_changed (ThunarFileMonitor *file_monitor,
                             ThunarFile        *file,
+                            gint               reason,
                             ThunarFolder      *folder)
 {
   _thunar_return_if_fail (THUNAR_IS_FILE (file));
@@ -663,7 +665,13 @@ thunar_folder_file_changed (ThunarFileMonitor *file_monitor,
   if (G_UNLIKELY (folder->corresponding_file == file))
     {
       /* ...and if so, reload the folder */
-      thunar_folder_reload (folder, FALSE);
+      if (reason == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED || (reason & ~0xFFF) == 0x1000)
+        {
+          /* if there is a folder monitor, ignore attribute changes and file monitor updates */
+          thunar_folder_reload_if_needed (folder);
+        }
+      else
+        thunar_folder_reload (folder, FALSE);
     }
 }
 
@@ -897,7 +905,7 @@ thunar_folder_monitor (GFileMonitor     *monitor,
         }
       else
         {
-          thunar_file_reload (folder->corresponding_file);
+          thunar_file_reload_ex (folder->corresponding_file, event_type);
         }
     }
 }
@@ -1047,6 +1055,7 @@ thunar_folder_reload_if_needed (ThunarFolder *folder)
   _thunar_return_if_fail (THUNAR_IS_FOLDER (folder));
 
   G_LOCK (folder_watch_mutex);
+  /* defer the check if we haven't finished creating the watch */
   if (folder->watch_cancellable != NULL)
     {
       G_UNLOCK (folder_watch_mutex);

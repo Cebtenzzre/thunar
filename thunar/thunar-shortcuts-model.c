@@ -144,6 +144,7 @@ static void               thunar_shortcuts_model_device_changed     (ThunarDevic
                                                                      ThunarShortcutsModel      *model);
 static void               thunar_shortcuts_model_file_changed       (ThunarFileMonitor         *file_monitor,
                                                                      ThunarFile                *file,
+                                                                     gint                       reason,
                                                                      ThunarShortcutsModel      *model);
 static void               thunar_shortcuts_model_file_destroyed     (ThunarFileMonitor         *file_monitor,
                                                                      ThunarFile                *file,
@@ -1766,6 +1767,7 @@ thunar_shortcuts_model_file_destroyed (ThunarFileMonitor      *file_monitor,
 static void
 thunar_shortcuts_model_file_changed (ThunarFileMonitor      *file_monitor,
                                      ThunarFile             *file,
+                                     gint                    reason,
                                      ThunarShortcutsModel   *model)
 {
   GtkTreeIter     iter;

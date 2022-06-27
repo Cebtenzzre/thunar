@@ -101,7 +101,8 @@ static gboolean           thunar_file_info_is_directory        (ThunarxFileInfo 
 static GFileInfo         *thunar_file_info_get_file_info       (ThunarxFileInfo        *file_info);
 static GFileInfo         *thunar_file_info_get_filesystem_info (ThunarxFileInfo        *file_info);
 static GFile             *thunar_file_info_get_location        (ThunarxFileInfo        *file_info);
-static void               thunar_file_info_changed             (ThunarxFileInfo        *file_info);
+static void               thunar_file_info_changed             (ThunarxFileInfo        *file_info,
+                                                                gint                    reason);
 static gboolean           thunar_file_denies_access_permission (const ThunarFile       *file,
                                                                 ThunarFileMode          usr_permissions,
                                                                 ThunarFileMode          grp_permissions,
@@ -618,7 +619,8 @@ thunar_file_info_get_location (ThunarxFileInfo *file_info)
 
 
 static void
-thunar_file_info_changed (ThunarxFileInfo *file_info)
+thunar_file_info_changed (ThunarxFileInfo *file_info,
+                          gint             reason)
 {
   ThunarFile *file = THUNAR_FILE (file_info);
 
@@ -629,7 +631,7 @@ thunar_file_info_changed (ThunarxFileInfo *file_info)
   FLAG_SET_THUMB_STATE (file, THUNAR_FILE_THUMB_STATE_UNKNOWN);
 
   /* tell the file monitor that this file changed */
-  thunar_file_monitor_file_changed (file);
+  thunar_file_monitor_file_changed (file, reason);
 }
 
 
@@ -726,7 +728,7 @@ thunar_file_monitor_update (GFile             *path,
         case G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
         case G_FILE_MONITOR_EVENT_PRE_UNMOUNT:
         case G_FILE_MONITOR_EVENT_DELETED:
-          thunar_file_reload (file);
+          thunar_file_reload_ex (file, event_type | 0x1000);
           break;
 
         default:
@@ -927,7 +929,7 @@ thunar_file_watch_reconnect (ThunarFile *file)
         }
 
       /* create a file or directory monitor */
-      file_watch->monitor = g_file_monitor (file->gfile, G_FILE_MONITOR_WATCH_MOUNTS | G_FILE_MONITOR_SEND_MOVED, NULL, NULL);
+      file_watch->monitor = g_file_monitor (file->gfile, G_FILE_MONITOR_WATCH_MOUNTS | G_FILE_MONITOR_WATCH_MOVES, NULL, NULL);
       if (G_LIKELY (file_watch->monitor != NULL))
         {
           /* watch monitor for file changes */
@@ -4025,7 +4027,7 @@ thunar_file_set_thumb_state (ThunarFile          *file,
 
   /* if the file has a thumbnail, reload it */
   if (state == THUNAR_FILE_THUMB_STATE_READY)
-    thunar_file_monitor_file_changed (file);
+    thunar_file_monitor_file_changed (file, -1);
 }
 
 
@@ -4417,8 +4419,9 @@ thunar_file_unwatch (ThunarFile *file)
 
 
 /**
- * thunar_file_reload:
- * @file : a #ThunarFile instance.
+ * thunar_file_reload_ex:
+ * @file   : a #ThunarFile instance.
+ * @reason : the #GFileMonitorEvent that triggered the reload.
  *
  * Tells @file to reload its internal state, e.g. by reacquiring
  * the file info from the underlying media.
@@ -4429,7 +4432,8 @@ thunar_file_unwatch (ThunarFile *file)
  * Return value: TRUE on success, FALSE otherwise
  **/
 gboolean
-thunar_file_reload (ThunarFile *file)
+thunar_file_reload_ex (ThunarFile *file,
+                       GFileMonitorEvent reason)
 {
   _thunar_return_val_if_fail (THUNAR_IS_FILE (file), FALSE);
 
@@ -4444,7 +4448,7 @@ thunar_file_reload (ThunarFile *file)
     }
 
   /* ... and tell others */
-  thunar_file_changed (file);
+  thunar_file_changed_ex (file, reason);
 
   return TRUE;
 }

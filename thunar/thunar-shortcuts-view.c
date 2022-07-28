@@ -1771,8 +1771,11 @@ thunar_shortcuts_view_stop_spinner (ThunarShortcutsView *view,
   _thunar_return_if_fail (THUNAR_IS_SHORTCUTS_VIEW (view));
 
   model = gtk_tree_view_get_model (GTK_TREE_VIEW (view));
-  child_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER (model));
-  thunar_shortcuts_model_set_busy (THUNAR_SHORTCUTS_MODEL (child_model), device, FALSE);
+  if (model != NULL)
+    {
+      child_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER (model));
+      thunar_shortcuts_model_set_busy (THUNAR_SHORTCUTS_MODEL (child_model), device, FALSE);
+    }
 
   /* return the focus to the current folder */
   thunar_shortcuts_view_select_by_file (view, view->current_directory);

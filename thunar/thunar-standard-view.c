@@ -337,6 +337,7 @@ struct _ThunarStandardViewPrivate
   guint                   drop_highlight : 1;
   guint                   drop_occurred : 1;   /* whether the data was dropped */
   GList                  *drop_file_list;      /* the list of URIs that are contained in the drop data */
+  GWeakRef                drop_source_view;
 
   /* the "new-files" closure, which is used to select files whenever
    * new files are created by a ThunarJob associated with this view
@@ -1103,6 +1104,9 @@ thunar_standard_view_finalize (GObject *object)
 
   /* drop any remaining "new-files" paths */
   thunar_g_list_free_full (standard_view->priv->new_files_path_list);
+
+  /* release weak reference to the DnD source view */
+  g_weak_ref_set (&standard_view->priv->drop_source_view, NULL);
 
   /* release our reference on the preferences */
   g_object_unref (G_OBJECT (standard_view->preferences));
@@ -2627,7 +2631,7 @@ thunar_standard_view_new_files_closure (ThunarStandardView *standard_view,
     }
 
   /* set the remove view data we possibly need to reload */
-  g_object_set_data (G_OBJECT (standard_view), I_("source-view"), source_view);
+  g_weak_ref_set (&standard_view->priv->drop_source_view, source_view);
 
   /* allocate a new "new-files" closure */
   standard_view->priv->new_files_closure = g_cclosure_new_swap (G_CALLBACK (thunar_standard_view_new_files), standard_view, NULL);
@@ -2704,9 +2708,11 @@ thunar_standard_view_new_files (ThunarStandardView *standard_view,
     }
 
   /* when performing dnd between 2 views, we force a reload on the source as well */
-  source_view = g_object_get_data (G_OBJECT (standard_view), I_("source-view"));
+  source_view = g_weak_ref_get (&standard_view->priv->drop_source_view);
   if (THUNAR_IS_VIEW (source_view))
     thunar_view_reload (THUNAR_VIEW (source_view), FALSE);
+  if (G_LIKELY (source_view != NULL))
+    g_object_unref (G_OBJECT (source_view));
 }
 
 

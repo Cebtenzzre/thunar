@@ -1601,7 +1601,7 @@ thunar_dbus_freedesktop_show_items (ThunarOrgFreedesktopFileManager1 *object,
   GList             *gfiles = NULL;
   ThunarFile        *thunar_file = NULL;
   ThunarFile        *thunar_folder = NULL;
-  GError            *error = NULL;
+  GError            *error = NULL, *error_out = NULL;
 
   screen = gdk_screen_get_default ();
   application = thunar_application_get ();
@@ -1611,7 +1611,10 @@ thunar_dbus_freedesktop_show_items (ThunarOrgFreedesktopFileManager1 *object,
       thunar_file = thunar_file_get_for_uri (uris[n], &error);
       if (error)
         {
-          g_dbus_method_invocation_take_error (invocation, error);
+          if (error_out)
+            g_clear_error(&error);
+          else
+            error_out = error;
           continue;
         }
 
@@ -1639,7 +1642,10 @@ thunar_dbus_freedesktop_show_items (ThunarOrgFreedesktopFileManager1 *object,
 
   g_object_unref (G_OBJECT (application));
 
-  thunar_org_freedesktop_file_manager1_complete_show_items (object, invocation);
+  if (error_out)
+    g_dbus_method_invocation_take_error (invocation, error);
+  else
+    thunar_org_freedesktop_file_manager1_complete_show_items (object, invocation);
   return TRUE;
 }
 
